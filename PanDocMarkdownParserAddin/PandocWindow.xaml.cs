@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
@@ -20,9 +21,9 @@ namespace PanDocMarkdownParserAddin
     /// <summary>
     /// Interaction logic for PasteHref.xaml
     /// </summary>
-    public partial class PandocMarkdownParserWindow  : MetroWindow
+    public partial class PandocMarkdownParserWindow : MetroWindow
     {
-        public  PandocAddinModel  Model { get; set; }
+        public PandocAddinModel Model { get; set; }
 
         public PandocMarkdownParserWindow(PanDocMarkdownParserAddin addin)
         {
@@ -39,7 +40,7 @@ namespace PanDocMarkdownParserAddin
             foreach (var item in Model.AddinConfiguration.Configurations.OrderBy(kv => kv.Value.Name))
                 Model.Configurations.Add(item.Value);
 
-            if (Model.AddinConfiguration.Configurations.Count < 1)            
+            if (Model.AddinConfiguration.Configurations.Count < 1)
                 InitializeConfigurations();
 
             if (Model.AddinConfiguration.Configurations.Count > 0)
@@ -84,9 +85,8 @@ namespace PanDocMarkdownParserAddin
         }
 
         private void PandocMarkdownParserWindow_Loaded(object sender, RoutedEventArgs e)
-        {                                     
+        {
         }
-
 
         private void CommanderWindow_Unloaded(object sender, RoutedEventArgs e)
         {
@@ -96,7 +96,6 @@ namespace PanDocMarkdownParserAddin
 
             Model.AddinConfiguration.Write();
         }
-
 
         private void ListCommands_OnMouseDoubleClick(object sender, MouseButtonEventArgs e)
         {
@@ -109,12 +108,11 @@ namespace PanDocMarkdownParserAddin
 
         private void ToolButtonNewCommand_Click(object sender, RoutedEventArgs e)
         {
-            var item = new PandocConfigurationItem {Name = "New Command"};
+            var item = new PandocConfigurationItem { Name = "New Command" };
             Model.Configurations.Add(item);
-            Model.ActiveConfiguration = item;            
+            Model.ActiveConfiguration = item;
             //ListConfigurations.SelectedItems.Add(Model.ActiveConfiguration);
         }
-
 
         private void ToolButtonRemoveCommand_Click(object sender, RoutedEventArgs e)
         {
@@ -124,12 +122,9 @@ namespace PanDocMarkdownParserAddin
             Model.Configurations.Remove(config);
         }
 
-
         private void ToolButtonRunConfiguration_Click(object sender, RoutedEventArgs e)
         {
             RunConfiguration();
-
-            
         }
 
         private void ToolButtonPandocFormats_Click(object sender, RoutedEventArgs e)
@@ -139,7 +134,6 @@ namespace PanDocMarkdownParserAddin
 
         private void RunConfiguration()
         {
-
             var item = ListConfigurations.SelectedItem as PandocConfigurationItem;
             if (item == null)
                 return;
@@ -172,6 +166,10 @@ namespace PanDocMarkdownParserAddin
                     return;
                 inputFile = of.FileName;
                 path = Path.GetDirectoryName(inputFile);
+
+                var extension = Path.GetExtension(of.FileName);
+                inputFile = Path.ChangeExtension(Path.GetTempFileName(), extension);
+                File.WriteAllText(inputFile, markdown, new UTF8Encoding(false) /* pandoc doesn't like the BOM */);
             }
             else
             {
@@ -179,25 +177,22 @@ namespace PanDocMarkdownParserAddin
                 {
                     string html = Model.Addin.Model.ActiveDocument.RenderHtml();
                     inputFile = Model.Addin.Model.ActiveDocument.HtmlRenderFilename;
-                    File.WriteAllText(inputFile, html,new UTF8Encoding(false) /* pandoc doesn't like the BOM */);
+                    File.WriteAllText(inputFile, html, new UTF8Encoding(false) /* pandoc doesn't like the BOM */);
                 }
                 else
                 {
                     inputFile = Path.ChangeExtension(Path.GetTempFileName(), ".md");
-                    File.WriteAllText(inputFile, markdown, new UTF8Encoding(false) /* pandoc doesn't like the BOM */);                    
+                    File.WriteAllText(inputFile, markdown, new UTF8Encoding(false) /* pandoc doesn't like the BOM */);
                 }
             }
 
-            
-            
             if (item.PromptForOutputFilename)
             {
-
                 string filename = Path.GetFileName(Path.ChangeExtension(inputFile, item.OutputExtension ?? ".pdf"));
                 var sd = new SaveFileDialog
                 {
                     Filter = "PDF Files (*.pdf)|*.pdf|Word Docx Files (*.docx)|*.docx|Html Files(*.htm,html)|*.html;*.htm|epub files (*.epub)|*.epub|Open Office ODT Files (*.odt)|*.odt|Open Document XML (*.xml)|*.xml|All Files (*.*)|*.*",
-                    FilterIndex = 1,
+                    FilterIndex = GetFilterIndex(item.OutputExtension),
                     FileName = filename,
                     Title = "Specify output file Pandoc Conversion",
                     InitialDirectory = path,
@@ -219,7 +214,7 @@ namespace PanDocMarkdownParserAddin
                     TextConsole.Text = res.Item2;
 
                     if (res.Item1)
-                        ShellUtils.GoUrl(sd.FileName);  
+                        ShellUtils.GoUrl(sd.FileName);
 
                     ShowStatus("Output was generated.", 6000);
                 }
@@ -229,10 +224,32 @@ namespace PanDocMarkdownParserAddin
                     ShowStatus("Error executing Pandoc configuration.", 8000);
                     SetStatusIcon(FontAwesomeIcon.Warning, Colors.Orange);
                 }
-
             }
         }
 
+        private int GetFilterIndex(string outputExtension)
+        {
+            int result = 1;
+            Dictionary<string, int> filterTypes = new Dictionary<string, int>()
+            {
+                { ".pdf",1 },
+                { ".docx",2 },
+                { ".htm",3 },
+                { ".html",3 },
+                {".epub",4 },
+                {".odt",5 },
+                {".xml",6 },
+                {".*",7 }
+            };
+            int index = 0;
+            bool brc = filterTypes.TryGetValue(outputExtension, out index);
+            if (brc)
+            {
+                result = index;
+            }
+
+            return result;
+        }
 
         private void ListCommands_KeyUp(object sender, KeyEventArgs e)
         {
@@ -244,7 +261,6 @@ namespace PanDocMarkdownParserAddin
         {
             //RunConfiguration();
         }
-
 
         #region StatusBar
 
@@ -264,7 +280,7 @@ namespace PanDocMarkdownParserAddin
                         if (window == null)
                             return;
 
-                        window.ShowStatus(null, 0);                        
+                        window.ShowStatus(null, 0);
                     }, this);
             }
 
@@ -297,6 +313,7 @@ namespace PanDocMarkdownParserAddin
             StatusIcon.SpinDuration = 0;
             StatusIcon.StopSpin();
         }
-        #endregion
+
+        #endregion StatusBar
     }
 }
